@@ -1,0 +1,171 @@
+
+function back_dated_script(){
+var i = 2;
+  var colm_st = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("control_2").getRange('Q'+i).getValue();
+   
+  while (colm_st)
+  {
+  var query = generate_delete_query(colm_st);
+      var query_insert = generate_insert_query(colm_st);
+    
+      Logger.log(colm_st);
+     Logger.log(query);
+    Logger.log(query_insert);
+    commit_query(query);
+      commit_query(query_insert);
+    i=i+1;
+ colm_st = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("control_2").getRange('Q'+i).getValue();
+  };
+}
+
+function generate_delete_query(colm_st) {
+  var flag = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("query_generation").getRange(colm_st+'203').getValues();
+    var flag1 = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("query_generation").getRange(colm_st+'204').getValues();
+    var flag2 = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("query_generation").getRange(colm_st+'205').getValues();
+  var temp_query = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("query_generation").getRange(colm_st+'206:'+colm_st+flag).getValues();
+  return(flag1+' '+flag2+''+temp_query+')')
+}
+
+function generate_insert_query(colm_st) {
+  var flag = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("query_generation").getRange(colm_st+'412').getValues();
+    var flag1 = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("query_generation").getRange(colm_st+'413').getValues();
+      var flag1_2 = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("query_generation").getRange(colm_st+'414').getValues();
+    var flag2 = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("query_generation").getRange(colm_st+'415').getValues();
+  var temp_query = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("query_generation").getRange(colm_st+'416:'+colm_st+flag).getValues();
+  return(flag1+' '+flag1_2+' '+flag2+''+temp_query+')')
+}
+
+
+
+function commit_query(query1) {
+
+  var job = {
+    configuration: {
+      
+      query: {
+        query:query1,
+        useLegacySql: false
+      }
+    }
+  };
+
+    Logger.log(job);
+  var result = BigQuery.Jobs.insert(job, 'your_project_ID');
+  Logger.log(result);
+;
+  Logger.log('akhil akhil')
+}
+//------------------------------------------------- 
+
+function runQuery() {
+  var projectNumber = 'your_project_ID';
+  if (projectNumber.length < 1) {
+      var errMsg = "You forgot to set a project number - So no BQ for you!";
+      Logger.log(errMsg);
+      Browser.msgBox(errMsg);
+      return;
+  }
+
+  var i = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("control").getRange('E1').getValue();; // starting point (row) of control sheet
+  var temp_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("control").getRange('A' + i).getValue();
+  var temp_st_row = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("control").getRange('B' + i).getValue();
+  var temp_st_col = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("control").getRange('C' + i).getValue();
+  var temp_query = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("control").getRange('D' + i).getValue();
+  var temp_id = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("control").getRange('E' + i).getValue();
+  var run_id = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("control").getRange('I' + i).getValue(); //modification added here
+  
+  while(temp_sheet) {
+    if (temp_id == "") {} else {
+      var test = Drive.Properties.list(temp_id) ;
+    };
+    
+    if (run_id == "Run") { //modification added here
+      doSomething(temp_sheet, i, temp_st_row, temp_st_col, temp_query, projectNumber);
+    }
+    else {
+    };
+    
+    i++;
+    
+    var temp_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("control").getRange('A' + i).getValue();
+    var temp_st_row = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("control").getRange('B' + i).getValue();
+    var temp_st_col = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("control").getRange('C' + i).getValue();
+    var temp_query = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("control").getRange('D' + i).getValue();
+    var temp_id = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("control").getRange('E' + i).getValue();
+    var run_id = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("control").getRange('I' + i).getValue(); //modification added here
+  }  
+}
+
+function doSomething(temp_sheet, iterator, temp_st_row, temp_st_col, temp_query, projectNumber) {
+  // SpreadsheetApp.getActiveSpreadsheet().getSheetByName("dump_new").clear();
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(temp_sheet);
+  var sql = temp_query;
+  var queryResults;
+  
+  // Inserts a Query Job : users
+  try {
+    var queryRequest = BigQuery.newQueryRequest();
+    queryRequest.setQuery(sql).setTimeoutMs(100000);
+    queryResults = BigQuery.Jobs.query(queryRequest, projectNumber);
+  }
+  catch (err) {
+    Logger.log(err);
+    Browser.msgBox(err);
+    return;
+  }
+  
+  // Check on status of the Query Job: users
+  while (queryResults.getJobComplete() == false) {
+    try {
+      queryResults = BigQuery.Jobs.getQueryResults(projectNumber, queryJob.getJobReference().getJobId());
+    }
+    catch (err) {
+      Logger.log(err);
+      Browser.msgBox(err);
+      return;
+    }
+  }
+
+  // Update the amount of results :users
+  var resultCount = queryResults.getTotalRows();
+  var resultSchema = queryResults.getSchema();
+  var resultValues = new Array(resultCount);
+  // var tableRows = queryResults.getRows(); 
+  // adding next 5 lines which catch the empty query error.
+  var tableRows = queryResults.getRows() || []; // if query results are null thenn this OR condition passes a emoty array so that we can read its length in line 101 
+  if (tableRows.length == 0) {
+    Logger.log(new Error("Query result is empty"));
+    return;
+  }
+  
+  // Iterate through query results :users
+  for (var i = 0; i < tableRows.length; i++) {
+    var cols = tableRows[i].getF();
+    resultValues[i] = new Array(cols.length);
+    // For each column, add values to the result array
+    for (var j = 0; j < cols.length; j++) {
+      resultValues[i][j] = cols[j].getV();
+    }
+  }
+
+  // Update the Spreadsheet with Null Values to the previous range and then add values to new range
+  var row_count = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("control").getRange('G' + iterator).getValue(); 
+  var col_count = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("control").getRange('H' + iterator).getValue(); 
+  
+  sheet.getRange(temp_st_row, temp_st_col, row_count, col_count).setValue(''); 
+  sheet.getRange(temp_st_row, temp_st_col, resultCount, tableRows[0].getF().length).setValues(resultValues); 
+  SpreadsheetApp.getActiveSpreadsheet().getSheetByName("control").getRange('G' + iterator).setValue(resultCount); 
+  SpreadsheetApp.getActiveSpreadsheet().getSheetByName("control").getRange('H' + iterator).setValue(tableRows[0].getF().length);   
+    SpreadsheetApp.getActiveSpreadsheet().getSheetByName("control").getRange('L' + iterator).setValue(new Date()); 
+  SpreadsheetApp.getActiveSpreadsheet().getSheetByName("control").getRange('M' + iterator).setValue(new Date());   
+}
+
+
+
+//-----------------------------------------
+function onOpen() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet();
+  var menuEntries = [ {name: 'back_dated_adjustment', functionName: 'back_dated_script'},
+                    {name: 'Run Query', functionName: 'runQuery'} ];
+  sheet.addMenu('BigQuery Example', menuEntries);
+};
